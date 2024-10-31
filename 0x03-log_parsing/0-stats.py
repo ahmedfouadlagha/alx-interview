@@ -4,59 +4,51 @@ Log parsing
 """
 
 import sys
-import signal
 
-# Initialize counters and dictionary for file size and status codes
-total_size = 0
-status_counts = {str(code): 0 for code in [200, 301, 400, 401, 403, 404, 405, 500]}
-line_count = 0
+if __name__ == '__main__':
 
-# Function to print the metrics
-def print_stats():
-    print("File size: {}".format(total_size))
-    for code in sorted(status_counts.keys()):
-        if status_counts[code] > 0:
-            print("{}: {}".format(code, status_counts[code]))
+    # Initialize variables for total file size and line count
+    filesize, count = 0, 0
 
-# Handle keyboard interrupt (CTRL + C)
-def signal_handler(sig, frame):
-    print_stats()
-    sys.exit(0)
+    # Define valid status codes and initialize a dictionary for counting occurrences
+    codes = ["200", "301", "400", "401", "403", "404", "405", "500"]
+    stats = {k: 0 for k in codes}
 
-# Register the signal handler
-signal.signal(signal.SIGINT, signal_handler)
+    # Function to print current statistics
+    def print_stats(stats: dict, filesize: int) -> None:
+        print("File size: {:d}".format(filesize))
+        for k, v in sorted(stats.items()):
+            if v:
+                print("{}: {}".format(k, v))
 
-# Read from stdin line by line
-try:
-    for line in sys.stdin:
-        line = line.strip()
-        parts = line.split()
+    try:
+        # Process each line from stdin
+        for line in sys.stdin:
+            count += 1
+            data = line.split()
 
-        # Validate format and parse elements
-        if len(parts) >= 7 and parts[2] == "-" and parts[5].startswith('"GET') and parts[6].startswith('/projects/260'):
+            # Extract and count status code if it exists in the line
             try:
-                # Extract file size and status code
-                status_code = parts[-2]
-                file_size = int(parts[-1])
+                status_code = data[-2]
+                if status_code in stats:
+                    stats[status_code] += 1
+            except IndexError:
+                pass  # Skip if line doesn't have a valid status code position
 
-                # Update total file size
-                total_size += file_size
-
-                # Update status code count if valid
-                if status_code in status_counts:
-                    status_counts[status_code] += 1
-
-                line_count += 1
-
-                # Print stats every 10 lines
-                if line_count % 10 == 0:
-                    print_stats()
-
+            # Add file size from the line if it's valid
+            try:
+                filesize += int(data[-1])
             except (ValueError, IndexError):
-                # Skip line if there’s an error in file size or status code format
-                continue
-except KeyboardInterrupt:
-    pass
-finally:
-    # Print stats one last time at the end or on interruption
-    print_stats()
+                pass  # Skip if file size is missing or not an integer
+
+            # Print stats every 10 lines
+            if count % 10 == 0:
+                print_stats(stats, filesize)
+
+        # Print final statistics after processing all lines
+        print_stats(stats, filesize)
+
+    except KeyboardInterrupt:
+        # Print stats on keyboard interruption and re-raise the exception to exit
+        print_stats(stats, filesize)
+        raise
