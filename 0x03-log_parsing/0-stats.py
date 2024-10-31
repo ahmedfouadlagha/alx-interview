@@ -1,54 +1,57 @@
 #!/usr/bin/python3
 """
-Log parsing
+Reads stdin line by line and computes metrics.
+
+Input format: <IP Address> - [<date>] "GET /projects/260 HTTP/1.1" <status code> <file size>
+After every 10 lines and/or a keyboard interruption (CTRL + C), prints statistics from the beginning:
+- Total file size: File size: <total size>
+- Number of lines by status code:
+  - Status code: <number>
+Status codes: 200, 301, 400, 401, 403, 404, 405, 500
 """
 
 import sys
+from collections import defaultdict
 
-if __name__ == '__main__':
+def print_statistics(total_size, status_codes):
+    """Prints statistics."""
+    print("Total file size: {}".format(total_size))
+    for code in sorted(status_codes.keys()):
+        print("{}: {}".format(code, status_codes[code]))
 
-    # Initialize variables for total file size and line count
-    filesize, count = 0, 0
+def parse_line(line):
+    """Parses a line and extracts IP address, status code, and file size."""
+    try:
+        parts = line.split()
+        ip_address = parts[0]
+        status_code = int(parts[-2])
+        file_size = int(parts[-1])
+        return ip_address, status_code, file_size
+    except Exception:
+        return None, None, None
 
-    # Define valid status codes and initialize a dictionary for counting occurrences
-    codes = ["200", "301", "400", "401", "403", "404", "405", "500"]
-    stats = {k: 0 for k in codes}
-
-    # Function to print current statistics
-    def print_stats(stats: dict, filesize: int) -> None:
-        print("File size: {:d}".format(filesize))
-        for k, v in sorted(stats.items()):
-            if v:
-                print("{}: {}".format(k, v))
+def main():
+    """Main function."""
+    total_size = 0
+    status_codes = defaultdict(int)
+    line_count = 0
 
     try:
-        # Process each line from stdin
         for line in sys.stdin:
-            count += 1
-            data = line.split()
+            ip_address, status_code, file_size = parse_line(line.strip())
+            if ip_address is None:
+                continue
 
-            # Extract and count status code if it exists in the line
-            try:
-                status_code = data[-2]
-                if status_code in stats:
-                    stats[status_code] += 1
-            except IndexError:
-                pass  # Skip if line doesn't have a valid status code position
+            total_size += file_size
+            status_codes[status_code] += 1
+            line_count += 1
 
-            # Add file size from the line if it's valid
-            try:
-                filesize += int(data[-1])
-            except (ValueError, IndexError):
-                pass  # Skip if file size is missing or not an integer
-
-            # Print stats every 10 lines
-            if count % 10 == 0:
-                print_stats(stats, filesize)
-
-        # Print final statistics after processing all lines
-        print_stats(stats, filesize)
+            if line_count % 10 == 0:
+                print_statistics(total_size, status_codes)
 
     except KeyboardInterrupt:
-        # Print stats on keyboard interruption and re-raise the exception to exit
-        print_stats(stats, filesize)
-        raise
+        print_statistics(total_size, status_codes)
+        sys.exit(0)
+
+if __name__ == "__main__":
+    main()
